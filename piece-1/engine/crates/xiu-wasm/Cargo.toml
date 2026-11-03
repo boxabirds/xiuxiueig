@@ -1,0 +1,11 @@
+[package]
+name = "xiu-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+xiu-dsp = { path = "../xiu-dsp" }

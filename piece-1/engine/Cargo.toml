@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["crates/xiu-dsp", "crates/xiu-wasm"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

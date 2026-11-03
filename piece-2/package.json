@@ -1,0 +1,12 @@
+{
+  "name": "jelly-asteroids",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "cd engine && cargo build --release --target wasm32-unknown-unknown -p jelly-wasm && cp target/wasm32-unknown-unknown/release/jelly_wasm.wasm ../web/assets/jelly.wasm",
+    "test:rust": "cd engine && cargo test --release -p jelly-audio",
+    "dev": "vite web --host 127.0.0.1 --port 5180",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node tests/browser/smoke.mjs"
+  }
+}

@@ -1,0 +1,62 @@
+:root {
+  --silver: #000000;
+  --ink: #c9c9d6;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--silver);
+  color: var(--ink);
+  font: 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+  touch-action: none;
+}
+canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+body.idle, body.idle * { cursor: none; }
+#enter {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 24px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 2.4s ease;
+}
+#enter .ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  animation: breathe 13s ease-in-out infinite;
+}
+#enter .hint { opacity: 0.45; letter-spacing: 0.2em; }
+#enter:focus-visible { outline: 1px dotted currentColor; outline-offset: 4px; }
+#enter.gone { opacity: 0; pointer-events: none; }
+#fault {
+  position: fixed;
+  inset: auto 16px 16px 16px;
+  margin: 0;
+  text-align: center;
+  opacity: 0.7;
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.6); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #enter .ring { animation: none; }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "xiuxiueig",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "cd engine && cargo build --release --target wasm32-unknown-unknown -p xiu-wasm && cp target/wasm32-unknown-unknown/release/xiu_wasm.wasm ../web/assets/xiu.wasm",
+    "dev": "vite web --host 127.0.0.1 --port 5179",
+    "test": "npm run test:rust && npm run test:js",
+    "test:rust": "cd engine && cargo test --release -p xiu-dsp",
+    "test:js": "node --test tests/*.test.js",
+    "test:browser": "node tests/browser/smoke.mjs"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0",
+    "playwright": "^1.57.0"
+  }
+}

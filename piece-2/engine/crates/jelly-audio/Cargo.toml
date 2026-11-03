@@ -1,0 +1,9 @@
+[package]
+name = "jelly-audio"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+# Piece 1's DSP (itself partly from JP-8): filters, chorus, math, noise.
+xiu-dsp = { path = "../../../../piece-1/engine/crates/xiu-dsp" }
