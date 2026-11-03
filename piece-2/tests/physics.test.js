@@ -130,3 +130,12 @@ test('spawned radii span the 500% range and stay within it', () => {
 });
 
 test('shell has 162 particles', () => assert.equal(PARTICLES, 162));
+
+test('merged jellies are born fully visible (no fade-in); new ones start at age 0', async () => {
+  const f = new JellyField(11, { manage: false });
+  const a = body([-2, 0, 0], [0, 0, 0], 1.2, 5), b = body([2, 0, 0], [0, 0, 0], 1.2, 9);
+  f.bodies.push(a, b);
+  assert.equal(a.age, 0);
+  const fused = f.fuse(a, b);
+  assert.ok(fused.age >= FIELD.bornVisibleAge);
+});

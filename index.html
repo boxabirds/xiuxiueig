@@ -301,7 +301,7 @@
 
       <a class="work" href="piece-2/web/">
         <div class="frame">
-          <img src="docs/images/piece-2-thumb.jpg" alt="Glossy jelly sweets floating in black space: striped, speckled and clear, catching studio window highlights." width="960" height="600">
+          <img src="docs/images/piece-2-thumb.jpg" alt="Glossy jelly sweets floating in black space: striped, speckled and clear, catching round studio highlights." width="960" height="600">
           <span class="numeral" aria-hidden="true">ii.</span>
         </div>
         <div class="body">
@@ -325,8 +325,8 @@
   </main>
 
   <script>
-  // A few glossy jellies drifting in black space, lit by a four-pane studio
-  // window (after piece 2). They melt together where they meet. Kept light:
+  // A few glossy jellies drifting in black space, lit by a round studio
+  // softbox (after piece 2). They melt together where they meet. Kept light:
   // reduced resolution, paused when hidden, one still frame for reduced motion.
   (() => {
     const RENDER_SCALE = 0.75;
@@ -382,16 +382,12 @@
         for (int i = 0; i < N; i++) { vec4 b = blob(i); float k = exp(-3.0 * max(length(p - b.xyz) - b.w, 0.0)); c += uColor[i] * k; w += k; }
         return c / max(w, 1e-4);
       }
-      float pane(vec2 q, vec2 size) {
-        vec2 e = smoothstep(size, size * 0.9, abs(q));
-        float bars = smoothstep(0.012, 0.024, abs(q.x)) * smoothstep(0.012, 0.024, abs(q.y));
-        return e.x * e.y * bars;
-      }
+      float disc(vec2 q, float r) { return smoothstep(r, r * 0.86, length(q)); } // round softbox
       vec3 studio(vec3 d) {
-        // camera-fixed softboxes: a big four-pane key behind-left, a cool fill, two rim strips
+        // camera-fixed softboxes: a round key behind-left, a cool fill, two rim strips
         vec3 c = vec3(0.0);
         vec3 key = normalize(vec3(-0.45, 0.55, 0.7));
-        if (dot(d, key) > 0.0) { vec3 u = normalize(cross(vec3(0, 1, 0), key)), v = cross(key, u); vec2 q = vec2(dot(d, u), dot(d, v)) / dot(d, key); c += vec3(6.5, 6.2, 5.8) * pane(q, vec2(0.3, 0.22)); }
+        if (dot(d, key) > 0.0) { vec3 u = normalize(cross(vec3(0, 1, 0), key)), v = cross(key, u); vec2 q = vec2(dot(d, u), dot(d, v)) / dot(d, key); c += vec3(6.5, 6.2, 5.8) * disc(q, 0.26); }
         vec3 fill = normalize(vec3(0.85, 0.2, 0.5));
         if (dot(d, fill) > 0.0) { vec3 u = normalize(cross(vec3(0, 1, 0), fill)), v = cross(fill, u); vec2 q = vec2(dot(d, u), dot(d, v)) / dot(d, fill); vec2 e = smoothstep(vec2(0.3, 0.42), vec2(0.27, 0.38), abs(q)); c += vec3(1.6, 2.1, 3.0) * e.x * e.y; }
         c += vec3(3.5) * smoothstep(0.06, 0.02, abs(d.x - 0.93)) * smoothstep(0.7, 0.5, abs(d.y));

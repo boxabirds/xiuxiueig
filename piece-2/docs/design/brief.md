@@ -3,7 +3,7 @@
 ## The piece in one paragraph
 
 You fly through black space in a field of giant jelly sweets. Studio lights
-travel with you, so every jelly is glossy and wet, with crisp window
+travel with you, so every jelly is glossy and wet, with crisp round
 highlights, deep colour where it's thick, and glowing edges where it's thin.
 The jellies drift, turn slowly and wobble. Some carry chocolate chips,
 sprinkles, glitter, stars or gold leaf; others are striped, swirled or two-tone
@@ -59,8 +59,9 @@ techniques and parameters, not code.
   reference, flight through empty black reads as a still image.
 - **The studio travels with you.** The lights are fixed to the viewer, like a
   camera rig:
-  - a big warm key softbox above and in front (four panes, as Unix Jelly's
-    window),
+  - a big warm **round** key softbox above and in front. Unix Jelly uses a
+    four-pane window, but its reflection on every jelly read as the Windows
+    logo, so it was changed to a circle;
   - a cooler fill softbox to one side,
   - two thin rim strips behind, to separate the jellies from the black.
 

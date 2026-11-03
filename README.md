@@ -44,10 +44,10 @@ struck glass.
 Fly through black space among giant jelly sweets, lit by a studio that travels
 with you. They squash when they touch, merge for good, and wobble.
 
-![Piece 2: flight, then two jellies fusing and the merged jelly wobbling](docs/images/piece-2-flight-and-merge.jpg)
+![Piece 2: four moments in flight, with round studio highlights](docs/images/piece-2-flight.jpg)
 
 - **Brief:** [piece-2/docs/design/brief.md](piece-2/docs/design/brief.md).
-- **Look:** after Unix Jelly's jelly. Studio window highlights, colour that
+- **Look:** after Unix Jelly's jelly. Round studio highlights, colour that
   deepens through thick jelly, inner glow and rim, Neutral tone mapping. All
   twelve jar looks: patterns layered inside the jelly (zebra, stripy, swirly,
   checked, two-tone, rainbow) or bits suspended in it (chocolate chips,

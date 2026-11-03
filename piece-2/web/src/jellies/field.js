@@ -12,12 +12,12 @@ export const FIELD = Object.freeze({
   // "12-15 at once" means in view: jellies spawn ahead and are recycled once
   // behind you, so nearly all of them are in front.
   spawnDistance: [15, 22],
-  spawnConeCos: Math.cos((32 * Math.PI) / 180),
+  spawnConeCos: Math.cos((22 * Math.PI) / 180),  // inside the 30 deg half-height of the view
   recycleDistance: 26,
   recycleBehindDistance: 4,     // beyond this and outside the view cone: recycle
-  recycleBehindCos: Math.cos((62 * Math.PI) / 180), // wider than the visible field (~43 deg), so nothing visibly pops
+  recycleBehindCos: Math.cos((52 * Math.PI) / 180), // just outside the visible field (~43 deg wide), so nothing visibly pops
   initialDistance: [6, 20],
-  initialConeCos: Math.cos((40 * Math.PI) / 180),
+  initialConeCos: Math.cos((28 * Math.PI) / 180),
   spawnGap: 1.5,
   spawnTries: 80,
   spawnSpeed: 0.35,             // drift speed, units/s
@@ -30,8 +30,8 @@ export const FIELD = Object.freeze({
   squashSeconds: 0.25,          // cumulative contact time before a squash turns into a merge
   contactMemorySeconds: 2,      // contact time fades over this long once apart
   contactStick: 0.35,           // fraction of relative normal velocity absorbed per substep on contact (sticky, not bouncy)
-  gravity: 0.06,                // gentle mutual attraction, so jellies find each other and merge while you watch
-  gravityMaxAccel: 0.15,
+  gravity: 0.02,                // gentle mutual attraction, so jellies find each other and merge while you watch
+  gravityMaxAccel: 0.05,        // (0.06 / 0.15 gave 18 merges in 20 s: a barrage of plops)
   gravitySoftening: 2,
   mergeSeconds: 2.5,
   mergeSpring: 1.6,             // 1/s^2: centres drawn together while blending
@@ -39,9 +39,14 @@ export const FIELD = Object.freeze({
   bubbleRadius: 1.3,
   bubbleStiffness: 0.5,
   unionSearchSteps: 14,
-  squishSensitivity: 25,        // per unit of summed skin depth; measured: a bump sums ~0.02/frame (-> ~0.4), a fly-through ~0.3-0.5 (-> ~1)
+  bornVisibleAge: 1e3,          // seconds; well past the renderer's fade-in
+  // Squish follows *rising* pressure (fast minus slow average): jellies resting
+  // against each other are silent. Measured before: absolute pressure kept the
+  // squish above 0.2 for 79% of flight, because gravity holds clusters together.
+  squishSensitivity: 15,        // measured live: 60 left the squish above 0.2 for 35% of flight
+  squishFastS: 0.05,
+  squishSlowS: 0.6,
   mergeSquish: 0.02,            // squelch depth per frame while a pair melts together
-  squishSmoothS: 0.06,
   unionScanSteps: 48,
   unionFallback: 0.6,           // fused-shell radius (x final) along rays that miss both parents
 });
@@ -65,6 +70,8 @@ export class JellyField {
     this.fusions = [];        // { from: bigger parent id, to: fused id }, consumed by the sound
     this.squish = { amount: 0, position: [0, 0, 0], radius: 1 };
     this.squishAccum = 0;
+    this.squishFast = 0;
+    this.squishSlow = 0;
     this.squishPos = [0, 0, 0];
     this.squishRadius = 0;
     this.radiusMax = FIELD.radiusMin * FIELD.sizeRatio;
@@ -229,8 +236,9 @@ export class JellyField {
   /** Squish intensity for the sound: how much skin is being pressed this frame. */
   updateSquish(dt) {
     const a = this.squishAccum, sq = this.squish;
-    const target = 1 - Math.exp(-a * FIELD.squishSensitivity);
-    sq.amount += (target - sq.amount) * (1 - Math.exp(-dt / FIELD.squishSmoothS));
+    this.squishFast += (a - this.squishFast) * (1 - Math.exp(-dt / FIELD.squishFastS));
+    this.squishSlow += (a - this.squishSlow) * (1 - Math.exp(-dt / FIELD.squishSlowS));
+    sq.amount = 1 - Math.exp(-Math.max(0, this.squishFast - this.squishSlow) * FIELD.squishSensitivity);
     if (a > 0) {
       for (let k = 0; k < 3; k++) sq.position[k] = this.squishPos[k] / a;
       sq.radius = this.squishRadius / a;
@@ -353,6 +361,7 @@ export class JellyField {
       for (let k = 0; k < 3; k++) init[i * 3 + k] = center[k] + dir[k] * r;
     }
     fused.setPositions(init, velocity);
+    fused.age = FIELD.bornVisibleAge; // born from two visible jellies: no fade-in
     this.bodies = this.bodies.filter((x) => x !== a && x !== b);
     this.bodies.push(fused);
     this.merges++;

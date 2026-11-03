@@ -9,7 +9,7 @@ export const PARAM_COUNT = PARAM_NAMES.length; // 57
 export const PARAM_INDEX = Object.freeze(Object.fromEntries(PARAM_NAMES.map((n, i) => [n, i])));
 const RANGES = { f: [20, 4000], g: [0, 1], p: [-1, 1] };
 const GLOBAL_RANGES = {
-  master: [0, 1], breath: [0, 1], squish: [0, 1], squishPitch: [120, 2400], squishPan: [-1, 1],
+  master: [0, 1], breath: [0, 1], squish: [0, 1], squishPitch: [60, 1200], squishPan: [-1, 1],
   plopCount: [0, 1e9], plopPitch: [150, 3000], plopPan: [-1, 1], plopGain: [0, 1],
 };
 export const PARAM_DESCRIPTORS = Object.freeze(PARAM_NAMES.map((name) => {

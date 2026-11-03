@@ -10,7 +10,7 @@ export const MAP = Object.freeze({
   sizeWeightPower: 0.35,
   plopPitch: 1500,          // Hz x radius^plopPower
   plopPower: 0.6,
-  squishPitch: 950,
+  squishPitch: 260,         // Hz x sqrt(radius): a low goo tone (~130 Hz big, ~290 Hz small)
   squishPower: 0.5,
 });
 

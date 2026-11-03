@@ -10,7 +10,6 @@ use core::f32::consts::{FRAC_PI_4, TAU};
 use xiu_dsp::chorus::{ChorusMode, StereoChorus};
 use xiu_dsp::filter::HighPass;
 use xiu_dsp::math::fast_tanh;
-use xiu_dsp::oscillator::NoiseGen;
 
 use crate::params::*;
 
@@ -44,30 +43,32 @@ const BREATH_FLOOR: f32 = 0.7;
 const CENTS_PER_OCTAVE: f32 = 1200.0;
 
 // ── squish ──────────────────────────────────────────────────────────────
-const SQUISH_ATTACK_S: f32 = 0.015;
-const SQUISH_RELEASE_S: f32 = 0.18;
-const SQUISH_Q: f32 = 7.0;
-const SQUISH_FORMANT_2: f32 = 2.3;        // second formant ratio
-const SQUISH_JITTER_HZ: f32 = 28.0;       // squelch: formant jumps this often
-const SQUISH_JITTER_DEPTH: f32 = 0.45;    // +- fraction of the centre
-const SQUISH_JITTER_GLIDE_S: f32 = 0.012;
-const SQUISH_GAIN: f32 = 0.85;
+// A soft, rounded "goo" tone: owner feedback was that the first version (noise
+// through randomly jumping formants) sounded like harsh record scratching.
+// No noise, no random jumps: a sine with a little second harmonic, low-passed,
+// sagging in pitch as it is pressed, with a very gentle vibrato.
+const SQUISH_ATTACK_S: f32 = 0.08;
+const SQUISH_RELEASE_S: f32 = 0.45;
+const SQUISH_PITCH_GLIDE_S: f32 = 0.15;
+const SQUISH_DROOP: f32 = 0.25;           // pitch sags by up to 25% as it is pressed
+const SQUISH_VIBRATO_HZ: f32 = 5.0;
+const SQUISH_VIBRATO_CENTS: f32 = 8.0;    // owner: "a very gentle vibrato is fine"
+const SQUISH_H2: f32 = 0.3;
+const SQUISH_LP_HZ: f32 = 1200.0;
+const SQUISH_GAIN: f32 = 0.5;
 const SQUISH_CURVE: f32 = 1.5;
-const SQUISH_PITCH_MIN: f32 = 120.0;
-const SQUISH_PITCH_MAX: f32 = 2400.0;
+const SQUISH_PITCH_MIN: f32 = 60.0;
+const SQUISH_PITCH_MAX: f32 = 1200.0;
 
 // ── plops ───────────────────────────────────────────────────────────────
 const PLOPS: usize = 8;
 const PLOP_RISE: f32 = 0.9;               // pitch rises by +90% (bubble resonance chirp)
 const PLOP_RISE_S: f32 = 0.025;
-const PLOP_ATTACK_S: f32 = 0.0015;
+const PLOP_ATTACK_S: f32 = 0.004;      // soft onset: no click
 const PLOP_DECAY_MIN_S: f32 = 0.035;
 const PLOP_DECAY_SLOPE: f32 = 0.025;       // seconds less ring per kHz: lower drops ring longer
 const HZ_PER_KHZ: f32 = 1000.0;
 const PLOP_DECAY_MAX_S: f32 = 0.1;
-const PLOP_CLICK_S: f32 = 0.003;
-const PLOP_CLICK_LEVEL: f32 = 0.35;
-const PLOP_CLICK_LP_HZ: f32 = 2500.0;
 const PLOP_LEVEL: f32 = 1.0;
 const PLOP_PITCH_MIN: f32 = 150.0;
 const PLOP_PITCH_MAX: f32 = 3000.0;
@@ -79,7 +80,6 @@ const DC_BLOCK_HZ: f32 = 20.0;
 const OUTPUT_DRIVE: f32 = 1.6;
 const OUTPUT_CEILING: f32 = 0.89;
 const MASTER_GLIDE_S: f32 = 0.05;
-const NOISE_SEED: u32 = 0x00C0_FFEE;
 
 #[inline(always)]
 fn coeff(seconds: f32, rate: f32) -> f32 {
@@ -132,22 +132,6 @@ struct Voice {
     drift_phase: f32,
 }
 
-/// Chamberlin state-variable band-pass.
-struct Svf {
-    low: f32,
-    band: f32,
-}
-
-impl Svf {
-    #[inline(always)]
-    fn bandpass(&mut self, input: f32, f: f32, damp: f32) -> f32 {
-        let high = input - self.low - damp * self.band;
-        self.band += f * high;
-        self.low += f * self.band;
-        self.band
-    }
-}
-
 struct Plop {
     phase: f32,
     t: f32,
@@ -155,7 +139,6 @@ struct Plop {
     decay: f32,
     gain: f32,
     pan: f32,
-    click_lp: f32,
     active: bool,
 }
 
@@ -166,12 +149,11 @@ pub struct Engine {
     next_plop: usize,
     last_plop_count: f32,
     squish_env: f32,
-    squish_center: f32,
-    squish_target: f32,
-    squish_timer: f32,
-    svf1: Svf,
-    svf2: Svf,
-    noise: NoiseGen,
+    squish_pitch: f32,
+    squish_phase: f32,
+    squish_phase2: f32,
+    squish_vib_phase: f32,
+    squish_lp: f32,
     chorus_l: StereoChorus,
     chorus_r: StereoChorus,
     dc_l: HighPass,
@@ -186,7 +168,8 @@ pub struct Engine {
     k_master: f32,
     k_attack: f32,
     k_release: f32,
-    k_jitter: f32,
+    k_squish_pitch: f32,
+    lp_squish: f32,
     twin_ratio: f32,
 }
 
@@ -204,7 +187,7 @@ impl Engine {
         dc_r.set_cutoff(DC_BLOCK_HZ);
         let mut params = [0.0; PARAM_COUNT];
         for v in 0..VOICES { params[v * PER_VOICE + V_FREQ] = 110.0; }
-        params[P_SQUISH_PITCH] = 500.0;
+        params[P_SQUISH_PITCH] = 200.0;
         params[P_PLOP_PITCH] = 800.0;
         Self {
             sine: Sine::new(),
@@ -212,16 +195,15 @@ impl Engine {
                 phases: [0.0; PARTIALS], twin_phase: 0.0, freq: 110.0, gain: 0.0, pan: 0.0,
                 recipe: i % RECIPES.len(), drift_phase: i as f32 * 0.137,
             }),
-            plops: core::array::from_fn(|_| Plop { phase: 0.0, t: 0.0, f0: 800.0, decay: 0.1, gain: 0.0, pan: 0.0, click_lp: 0.0, active: false }),
+            plops: core::array::from_fn(|_| Plop { phase: 0.0, t: 0.0, f0: 800.0, decay: 0.1, gain: 0.0, pan: 0.0, active: false }),
             next_plop: 0,
             last_plop_count: 0.0,
             squish_env: 0.0,
-            squish_center: 500.0,
-            squish_target: 500.0,
-            squish_timer: 0.0,
-            svf1: Svf { low: 0.0, band: 0.0 },
-            svf2: Svf { low: 0.0, band: 0.0 },
-            noise: NoiseGen::new(NOISE_SEED),
+            squish_pitch: 200.0,
+            squish_phase: 0.0,
+            squish_phase2: 0.0,
+            squish_vib_phase: 0.0,
+            squish_lp: 0.0,
             chorus_l, chorus_r, dc_l, dc_r,
             params,
             master: 0.0,
@@ -233,7 +215,8 @@ impl Engine {
             k_master: coeff(MASTER_GLIDE_S, sample_rate),
             k_attack: coeff(SQUISH_ATTACK_S, sample_rate),
             k_release: coeff(SQUISH_RELEASE_S, sample_rate),
-            k_jitter: coeff(SQUISH_JITTER_GLIDE_S, sample_rate),
+            k_squish_pitch: coeff(SQUISH_PITCH_GLIDE_S, sample_rate),
+            lp_squish: 1.0 - (-TAU * SQUISH_LP_HZ / sample_rate).exp(),
             twin_ratio: (TWIN_DETUNE_CENTS / CENTS_PER_OCTAVE).exp2(),
         }
     }
@@ -270,7 +253,6 @@ impl Engine {
         p.decay = (PLOP_DECAY_MAX_S - PLOP_DECAY_SLOPE * f0 / HZ_PER_KHZ).clamp(PLOP_DECAY_MIN_S, PLOP_DECAY_MAX_S);
         p.gain = self.params[P_PLOP_GAIN];
         p.pan = self.params[P_PLOP_PAN];
-        p.click_lp = 0.0;
         p.active = true;
     }
 
@@ -285,8 +267,7 @@ impl Engine {
         let squish_target = self.params[P_SQUISH].powf(SQUISH_CURVE);
         let squish_pitch = self.params[P_SQUISH_PITCH];
         let (sq_l, sq_r) = equal_power(self.params[P_SQUISH_PAN]);
-        let click_k = coeff(1.0 / (TAU * PLOP_CLICK_LP_HZ), self.sample_rate);
-        let damp = 1.0 / SQUISH_Q;
+        let vib_ratio_depth = SQUISH_VIBRATO_CENTS / CENTS_PER_OCTAVE;
 
         for frame in 0..BLOCK_FRAMES {
             let mut left = 0.0f32;
@@ -316,37 +297,31 @@ impl Engine {
                 right += s * gr;
             }
 
-            // Squish: noise through two jittering resonant formants.
+            // Squish: a soft goo tone that swells, sags in pitch and breathes a little.
             let env_k = if squish_target > self.squish_env { self.k_attack } else { self.k_release };
             self.squish_env += env_k * (squish_target - self.squish_env);
+            self.squish_pitch += self.k_squish_pitch * (squish_pitch - self.squish_pitch);
             if self.squish_env > PLOP_SILENT {
-                self.squish_timer -= inv_sr;
-                if self.squish_timer <= 0.0 {
-                    self.squish_timer = 1.0 / SQUISH_JITTER_HZ;
-                    self.squish_target = squish_pitch * (1.0 + self.noise.next() * SQUISH_JITTER_DEPTH);
-                }
-                self.squish_center += self.k_jitter * (self.squish_target - self.squish_center);
-                let n = self.noise.next();
-                let f1 = (2.0 * (core::f32::consts::PI * self.squish_center * inv_sr).sin()).min(1.0);
-                let f2 = (2.0 * (core::f32::consts::PI * self.squish_center * SQUISH_FORMANT_2 * inv_sr).sin()).min(1.0);
-                let s = (self.svf1.bandpass(n, f1, damp) + 0.5 * self.svf2.bandpass(n, f2, damp)) * self.squish_env * SQUISH_GAIN;
+                advance(&mut self.squish_vib_phase, SQUISH_VIBRATO_HZ * inv_sr);
+                let vib = (self.sine.at(self.squish_vib_phase) * vib_ratio_depth).exp2();
+                let f = self.squish_pitch * (1.0 - SQUISH_DROOP * self.squish_env) * vib;
+                advance(&mut self.squish_phase, f * inv_sr);
+                advance(&mut self.squish_phase2, 2.0 * f * inv_sr);
+                let tone = self.sine.at(self.squish_phase) + SQUISH_H2 * self.sine.at(self.squish_phase2);
+                self.squish_lp += self.lp_squish * (tone - self.squish_lp);
+                let s = self.squish_lp * self.squish_env * SQUISH_GAIN;
                 left += s * sq_l;
                 right += s * sq_r;
             }
 
-            // Plops: impact click + rising bubble resonance.
+            // Plops: a soft-onset bubble resonance whose pitch rises (a water drop).
             for p in self.plops.iter_mut() {
                 if !p.active { continue; }
                 let f = p.f0 * (1.0 + PLOP_RISE * (1.0 - (-p.t / PLOP_RISE_S).exp()));
                 advance(&mut p.phase, f * inv_sr);
                 let attack = (p.t / PLOP_ATTACK_S).min(1.0);
                 let env = attack * (-p.t / p.decay).exp();
-                let mut s = self.sine.at(p.phase) * env;
-                if p.t < PLOP_CLICK_S {
-                    p.click_lp += click_k * (self.noise.next() - p.click_lp);
-                    s += p.click_lp * PLOP_CLICK_LEVEL * (1.0 - p.t / PLOP_CLICK_S);
-                }
-                s *= p.gain * PLOP_LEVEL;
+                let s = self.sine.at(p.phase) * env * p.gain * PLOP_LEVEL;
                 let (gl, gr) = equal_power(p.pan);
                 left += s * gl;
                 right += s * gr;

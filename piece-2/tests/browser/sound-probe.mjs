@@ -1,5 +1,6 @@
-// Measures piece 2's live audio: drone present, and a staged merge adds squish +
-// plop energy (2-6 kHz band and overall level) above the drone.
+// Measures piece 2's live audio: the drone is present, a staged merge is audible
+// as a swell (squish + plop), and nothing is harsh: almost no 2-6 kHz energy
+// (the first squish was noise and read as record scratching).
 // Usage: npm run dev; node tests/browser/sound-probe.mjs
 import { chromium } from 'playwright';
 const URL = process.env.XIU_URL ?? 'http://127.0.0.1:5180/';
@@ -32,14 +33,15 @@ const result = await page.evaluate(async () => {
     new JellyBody({ center: at(-2.4), velocity: right.map((x) => x * 0.9), radius: 1.3, random: rng(5), look: 'classic', color: '#9b5cff', color2: '#ffc61a' }),
     new JellyBody({ center: at(2.4), velocity: right.map((x) => -x * 0.9), radius: 1.1, random: rng(6), look: 'classic', color: '#ffc61a', color2: '#9b5cff' }));
   const m0 = field.merges;
-  const during = await series(4000);
+  const during = await series(7000);
   return { before, during, merged: field.merges > m0, plops: sound.values[sound.values.length - 4] };
 });
 const stat = (arr, k) => { const v = arr.map((x) => x[k]).sort((a, b) => a - b); return { median: v[v.length >> 1], max: v.at(-1) }; };
 const b = { rms: stat(result.before, 'rms'), hi: stat(result.before, 'hi') }, d = { rms: stat(result.during, 'rms'), hi: stat(result.during, 'hi') };
 console.log(`drone before: rms median ${b.rms.median.toFixed(4)}, 2-6 kHz median ${b.hi.median.toFixed(1)} dB`);
 console.log(`during merge: rms max ${d.rms.max.toFixed(4)}, 2-6 kHz max ${d.hi.max.toFixed(1)} dB; merged=${result.merged}`);
-const ok = b.rms.median > 0.005 && result.merged && d.hi.max > b.hi.median + 12;
-console.log(ok ? 'PASS sound: drone present, merge adds squish/plop energy' : 'FAIL sound');
+const HISS_CEILING_DB = -70;
+const ok = b.rms.median > 0.005 && result.merged && d.rms.max > b.rms.median * 1.5 && d.hi.max < HISS_CEILING_DB;
+console.log(ok ? 'PASS sound: drone present, merge swells audibly, no hiss or scratch' : 'FAIL sound');
 await browser.close();
 process.exit(ok ? 0 : 1);

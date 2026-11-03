@@ -62,8 +62,29 @@ test('end to end: a merge produces one plop, a squish while pressing, and a lowe
   }
   assert.equal(field.merges, 1, 'no merge');
   assert.equal(sound.values[PARAM_INDEX.plopCount], 1);
-  assert.ok(maxSquish > 0.2, `no squish while pressing: ${maxSquish}`);
+  // Squish now follows rising pressure, so one bump peaks around 0.2 (it was
+  // absolute pressure before, and saturated). 0.1 is still clearly audible.
+  assert.ok(maxSquish > 0.1, `no squish while pressing: ${maxSquish}`);
   const fused = field.bodies[0];
   assert.equal(sound.slots.slotOf.get(fused.id), slot, 'fused jelly did not inherit the slot');
   assert.ok(sound.values[slot * 3] <= pitchBefore, `merged pitch ${sound.values[slot * 3]} should not be above ${pitchBefore}`);
+});
+
+test('jellies resting against each other are silent; a new bump squishes', () => {
+  const field = new JellyField(4, { manage: false });
+  const mk = (c, v, r, seed) => new JellyBody({ center: c, velocity: v, radius: r, random: rng(seed), look: 'classic', color: '#ff4d6d', color2: '#3a5bff' });
+  // Pressed together and at rest (merging disabled to isolate resting contact).
+  const a = mk([-1.15, 0, 10], [0, 0, 0], 1.2, 1), b = mk([1.15, 0, 10], [0, 0, 0], 1.2, 2);
+  field.bodies.push(a, b);
+  const merge = field.updateMerges; field.updateMerges = () => {};
+  for (let i = 0; i < 180; i++) field.step(1 / 60, [0, 0, -50], [0, 0, 1], 0.5);
+  let resting = 0;
+  for (let i = 0; i < 120; i++) { field.step(1 / 60, [0, 0, -50], [0, 0, 1], 0.5); resting = Math.max(resting, field.squish.amount); }
+  assert.ok(resting < 0.05, `resting contact squishes: ${resting}`);
+  // A third jelly bumps in.
+  field.bodies.push(mk([0, 4, 10], [0, -1.5, 0], 1.0, 3));
+  let bump = 0;
+  for (let i = 0; i < 180; i++) { field.step(1 / 60, [0, 0, -50], [0, 0, 1], 0.5); bump = Math.max(bump, field.squish.amount); }
+  assert.ok(bump > 0.2, `a new bump should squish: ${bump}`);
+  field.updateMerges = merge;
 });

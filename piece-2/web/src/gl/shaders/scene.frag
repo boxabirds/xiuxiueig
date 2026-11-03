@@ -1,7 +1,7 @@
 // Jelly asteroids. Each jelly is a star-shaped surface r(dir) given by 25 real
 // spherical-harmonic coefficients fitted to its XPBD shell every frame (see
 // jellies/body.js). Merging pairs blend with a growing smooth union.
-// Look after Unix Jelly: studio windows to reflect, colour that deepens
+// Look after Unix Jelly: studio lights to reflect, colour that deepens
 // through thick jelly, inner glow where thin, a rim; layered looks colour the
 // light inside, bit looks suspend opaque things in it.
 in vec2 vUv;
@@ -36,11 +36,14 @@ const float SCATTER_GAIN = 1.6;     // studio light scattered inside the jelly
 const float FADE_START = 15.0;      // jellies dim into the dark beyond this
 const float FADE_RATE = 0.18;
 const float BLEND_WIDTH = 0.6;
+const float FADE_IN_S = 2.5;        // new jellies fade in from nothing (owner request)
 
 // ── studio rig (camera space; travels with the viewer) ──
+// The key is a round softbox (a beauty dish). It was a four-pane window, after
+// Unix Jelly, but its reflection read as the Windows logo on every jelly.
 const vec3 KEY_DIR = vec3(-0.45, 0.55, -0.70);   // behind, above, left: reflects in faces turned to you
 const vec3 KEY_COLOR = vec3(7.0, 6.7, 6.2);
-const vec2 KEY_SIZE = vec2(0.55, 0.42);
+const vec2 KEY_SIZE = vec2(0.42, 0.42);          // round: x is the radius
 const vec3 FILL_DIR = vec3(0.85, 0.15, -0.50);
 const vec3 FILL_COLOR = vec3(1.8, 2.3, 3.2);
 const vec2 FILL_SIZE = vec2(0.3, 0.45);
@@ -48,7 +51,7 @@ const vec3 RIM_DIR_L = vec3(-0.92, 0.05, 0.38);  // thin strips ahead to the sid
 const vec3 RIM_DIR_R = vec3(0.92, 0.05, 0.38);
 const vec3 RIM_COLOR = vec3(4.5, 4.4, 4.8);
 const vec2 RIM_SIZE = vec2(0.04, 0.8);
-const float PANE_BAR = 0.035;
+const float ROUND_EDGE = 0.86;                    // inner radius fraction where the soft edge starts
 const float STAR_SCALE = 260.0;
 const float STAR_THRESHOLD = 0.9975;
 const float STAR_GAIN = 0.55;
@@ -230,17 +233,16 @@ vec3 findBit(int look, float seed, vec3 qa, vec3 qb, vec3 rdWorld, out float fra
   return vec3(0.0);
 }
 
-float softbox(vec3 dc, vec3 dir, vec2 size, bool panes) {
+float softbox(vec3 dc, vec3 dir, vec2 size, bool round) {
   vec3 n = normalize(dir);
   float facing = dot(dc, n);
   if (facing <= 0.0) return 0.0;
   vec3 u = normalize(cross(vec3(0.0, 1.0, 0.0), n));
   vec3 v = cross(n, u);
   vec2 q = vec2(dot(dc, u), dot(dc, v)) / facing;
+  if (round) return smoothstep(size.x, size.x * ROUND_EDGE, length(q));
   vec2 edge = smoothstep(size, size * 0.92, abs(q));
-  float m = edge.x * edge.y;
-  if (panes) m *= smoothstep(PANE_BAR * 0.5, PANE_BAR, abs(q.x)) * smoothstep(PANE_BAR * 0.5, PANE_BAR, abs(q.y));
-  return m;
+  return edge.x * edge.y;
 }
 
 vec3 stars(vec3 d) {
@@ -281,6 +283,7 @@ void main() {
     vec3 p;
     vec3 n;
     float F = 0.0;
+    float fade = 1.0;   // a fading-in jelly is partly see-through (no refraction, less colour)
     if (!inside) {
       if (nCand == 0) break;
       float t = 0.0;
@@ -300,9 +303,13 @@ void main() {
       if (layer == 0) depth = t;
       n = fieldNormal(p);
       F = F0 + (1.0 - F0) * pow(1.0 - clamp(dot(-rd, n), 0.0, 1.0), 5.0);
-      // Clearcoat reflection of the studio: the window highlights.
-      col += thr * F * CLEARCOAT * env(reflect(rd, n), false);
-      rd = refract(rd, n, 1.0 / IOR);
+      int jh, jh2; float wh;
+      nearestPair(p, jh, jh2, wh);
+      fade = jh >= 0 ? smoothstep(0.0, FADE_IN_S, J(jh, 14).y) : 1.0;
+      // Clearcoat reflection of the studio: the round softbox highlight.
+      col += thr * fade * F * CLEARCOAT * env(reflect(rd, n), false);
+      vec3 straight = rd;
+      rd = normalize(mix(straight, refract(straight, n, 1.0 / IOR), fade));
       ro = p + rd * HIT_EPS * 4.0;
     } else {
       p = ro;
@@ -347,19 +354,21 @@ void main() {
     vec3 scatter = tint * exp(-sigma * segment * 0.5) * (1.0 - exp(-segment / radius)) * lit * SCATTER_GAIN;
     float thin = clamp(1.0 - segment / (radius * 1.8), 0.15, 1.0);
     float rim = pow(1.0 - clamp(dot(n, -normalize(pe - uCamPos)), 0.0, 1.0), RIM_POWER) * RIM_GAIN;
-    col += thr * (1.0 - F) * (scatter + tint * (thin * GLOW_THIN + rim) * GLOW_GAIN * KEY_COLOR.x * 0.3);
-    thr *= (1.0 - F) * trans;
+    col += thr * fade * (1.0 - F) * (scatter + tint * (thin * GLOW_THIN + rim) * GLOW_GAIN * KEY_COLOR.x * 0.3);
+    thr *= mix(vec3(1.0), (1.0 - F) * trans, fade);
     travelled += segment;
 
-    if (frac >= 0.0) {
+    if (frac >= 0.0 && fade > 0.999) {
       col += thr * bit;
       done = true;
       break;
     }
+    if (frac >= 0.0) col += thr * bit * fade;
 
     vec3 ne = fieldNormal(pe);
     vec3 outDir = refract(rd, -ne, IOR);
     if (dot(outDir, outDir) < 0.5) outDir = reflect(rd, -ne);
+    outDir = normalize(mix(rd, outDir, fade));
     rd = outDir;
     ro = pe + rd * HIT_EPS * 6.0;
     tEnd = gather(ro, rd);
