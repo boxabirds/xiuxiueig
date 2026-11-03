@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>xiuxiueig</title>
+  <meta name="description" content="Interactive jelly artworks with generative sound.">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,100,1;1,9..144,300..700,100,1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #000;
+      --ink: #f3f1ff;
+      --muted: rgba(243, 241, 255, 0.62);
+      --faint: rgba(243, 241, 255, 0.14);
+      --glass: rgba(18, 14, 34, 0.42);
+      --pink: #ff4d6d;
+      --green: #62c934;
+      --blue: #3a5bff;
+      --yellow: #ffc61a;
+      --orange: #ff8a2b;
+      --violet: #9b5cff;
+      --radius: 28px;
+      --gutter: 16px;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --display: "Fraunces", ui-serif, Georgia, serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); }
+    body {
+      min-height: 100vh;
+      font: 16px/1.55 var(--display);
+      font-variation-settings: "SOFT" 100, "WONK" 1;
+      overflow-x: hidden;
+      /* Fallback when WebGL is unavailable: soft jelly glows. */
+      background:
+        radial-gradient(40vmax 40vmax at 15% 20%, rgba(255, 77, 109, .28), transparent 60%),
+        radial-gradient(35vmax 35vmax at 85% 30%, rgba(58, 91, 255, .30), transparent 60%),
+        radial-gradient(30vmax 30vmax at 60% 85%, rgba(98, 201, 52, .22), transparent 60%),
+        #000;
+    }
+    canvas#jelly {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 0;
+    }
+    .veil {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 50% 40%, transparent 30%, rgba(0, 0, 0, .55) 100%);
+    }
+    main {
+      position: relative;
+      z-index: 2;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: clamp(40px, 9vh, 110px) var(--gutter) 48px;
+    }
+    header { position: relative; text-align: center; }
+    header::before {
+      content: "";
+      position: absolute;
+      inset: -12% 0 -6%; /* no sideways overhang: it caused horizontal scroll on phones */
+      z-index: -1;
+      background: radial-gradient(closest-side, rgba(0, 0, 0, .78), rgba(0, 0, 0, .45) 60%, transparent);
+      pointer-events: none;
+    }
+    .eyebrow {
+      font: 12px/1 var(--mono);
+      letter-spacing: .32em;
+      text-transform: lowercase;
+      color: var(--muted);
+    }
+    h1 {
+      margin: .18em 0 .05em;
+      font-weight: 340;
+      font-size: clamp(64px, 15vw, 188px);
+      line-height: .9;
+      letter-spacing: -.035em;
+      font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144;
+      background: linear-gradient(180deg, #fff 10%, #e9e4ff 45%, #b9a8ff 70%, #ffb3c1 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 6px 30px rgba(155, 92, 255, .35));
+    }
+    .whisper {
+      margin: 0;
+      font-style: italic;
+      font-size: clamp(18px, 2.4vw, 24px);
+      color: var(--muted);
+    }
+    .whisper b { font-weight: 500; color: var(--ink); font-style: normal; }
+
+    .sound {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: fit-content;
+      max-width: 100%;
+      margin: 36px auto 0;
+      padding: 12px 20px 12px 14px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255, 198, 26, .16), rgba(255, 77, 109, .14));
+      border: 1px solid rgba(255, 198, 26, .45);
+      box-shadow: 0 0 40px rgba(255, 198, 26, .12), inset 0 1px 0 rgba(255, 255, 255, .12);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      font: 14px/1.4 var(--mono);
+    }
+    .sound svg { flex: none; width: 30px; height: 30px; color: var(--yellow); }
+    .sound strong { color: var(--yellow); font-weight: 600; }
+
+    .works {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(18px, 3vw, 34px);
+      margin-top: clamp(40px, 7vh, 72px);
+    }
+    .work {
+      --tint: var(--violet);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--radius);
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      background: var(--glass);
+      border: 1px solid var(--faint);
+      backdrop-filter: blur(14px) saturate(1.3);
+      -webkit-backdrop-filter: blur(14px) saturate(1.3);
+      box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--tint) 55%, transparent), inset 0 1px 0 rgba(255, 255, 255, .1);
+      transition: transform .5s cubic-bezier(.2, 1.6, .4, 1), box-shadow .5s ease, border-color .5s ease;
+    }
+    .work:nth-child(1) { --tint: var(--pink); }
+    .work:nth-child(2) { --tint: var(--blue); }
+    .work:hover, .work:focus-visible {
+      transform: translateY(-6px) scale(1.012);
+      border-color: color-mix(in srgb, var(--tint) 60%, white 10%);
+      box-shadow: 0 40px 100px -28px color-mix(in srgb, var(--tint) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, .16);
+      outline: none;
+    }
+    .work:focus-visible { box-shadow: 0 0 0 3px var(--yellow), 0 40px 100px -28px color-mix(in srgb, var(--tint) 80%, transparent); }
+    .frame { position: relative; aspect-ratio: 16 / 10; overflow: hidden; }
+    .frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scale(1.02);
+      transition: transform 1.2s cubic-bezier(.2, .8, .2, 1);
+    }
+    .work:hover .frame img { transform: scale(1.08); }
+    /* A glossy sheen that sweeps across the thumbnail on hover. */
+    .frame::after {
+      content: "";
+      position: absolute;
+      inset: -20%;
+      z-index: 1;
+      background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, .22) 47%, rgba(255, 255, 255, .06) 53%, transparent 60%);
+      transform: translateX(-60%);
+      transition: transform 1.1s cubic-bezier(.2, .8, .2, 1);
+      pointer-events: none;
+    }
+    .work:hover .frame::after { transform: translateX(60%); }
+    .frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: linear-gradient(180deg, transparent 55%, rgba(8, 6, 18, .75));
+    }
+    .numeral {
+      position: absolute;
+      z-index: 2;
+      left: 22px;
+      bottom: 14px;
+      font: italic 300 56px/1 var(--display);
+      color: rgba(255, 255, 255, .92);
+      text-shadow: 0 4px 24px rgba(0, 0, 0, .5);
+    }
+    .body { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+    .work h2 {
+      margin: 0;
+      font-weight: 420;
+      font-size: clamp(22px, 2.6vw, 30px);
+      line-height: 1.12;
+      letter-spacing: -.01em;
+    }
+    .work h2 em { font-style: italic; font-weight: 340; }
+    .work p { margin: 0; color: var(--muted); font-size: 16px; }
+    .meta {
+      margin-top: auto;
+      padding-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font: 12px/1 var(--mono);
+      letter-spacing: .12em;
+      color: var(--muted);
+    }
+    .enter {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      color: #10081e;
+      background: radial-gradient(120% 140% at 30% 20%, #fff, color-mix(in srgb, var(--tint) 55%, white) 55%, var(--tint));
+      box-shadow: inset 0 -3px 8px rgba(0, 0, 0, .25), inset 0 2px 3px rgba(255, 255, 255, .7), 0 8px 24px -8px var(--tint);
+      font-weight: 600;
+      letter-spacing: .08em;
+      transition: transform .4s cubic-bezier(.2, 1.8, .4, 1);
+    }
+    .work:hover .enter { transform: scale(1.06); }
+    .tag { display: inline-flex; align-items: center; gap: 6px; }
+    .tag svg { width: 14px; height: 14px; }
+
+    .how {
+      margin: 44px auto 0;
+      max-width: 640px;
+      text-align: center;
+      font: 13px/1.7 var(--mono);
+      color: var(--muted);
+    }
+    .how kbd {
+      padding: 1px 7px;
+      border: 1px solid var(--faint);
+      border-radius: 6px;
+      font: inherit;
+      color: var(--ink);
+    }
+    footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid var(--faint);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 28px;
+      justify-content: space-between;
+      font: 12px/1.6 var(--mono);
+      color: var(--muted);
+    }
+    footer a { color: var(--ink); text-underline-offset: 3px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    @media (max-width: 760px) {
+      .works { grid-template-columns: 1fr; }
+      .sound { border-radius: 20px; align-items: flex-start; }
+      .numeral { font-size: 44px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .work, .frame img, .frame::after, .enter { transition: none; }
+      .work:hover .frame::after { transform: translateX(-60%); }
+      .work:hover, .work:focus-visible { transform: none; }
+      .work:hover .frame img { transform: scale(1.02); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="jelly" aria-hidden="true"></canvas>
+  <div class="veil" aria-hidden="true"></div>
+
+  <main>
+    <header>
+      <div class="eyebrow">interactive jelly artworks · light &amp; sound</div>
+      <h1>xiuxiueig</h1>
+      <p class="whisper"><b>whisper</b>, in Catalan · <i>shyoo-shyoo-aitch</i></p>
+      <p class="sound" role="note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor" fill-opacity=".2"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>
+        </svg>
+        <span><strong>These pieces make sound.</strong> Turn your volume down before you enter. Headphones are best.</span>
+      </p>
+    </header>
+
+    <section class="works" aria-label="Artworks">
+      <a class="work" href="piece-1/web/">
+        <div class="frame">
+          <img src="docs/images/piece-1-thumb.jpg" alt="A psychedelic landscape of folded, translucent jelly membranes in magenta, gold and blue." width="960" height="600">
+          <span class="numeral" aria-hidden="true">i.</span>
+        </div>
+        <div class="body">
+          <h2><em>unknowable, unspeakable, unarticulable</em></h2>
+          <p>An endless field of jelly membranes in psychedelic colour that never repeats, over a silver floor of caustic light. A drone made from the overtones of struck glass breathes with it.</p>
+          <div class="meta">
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>sound</span>
+            <span class="enter">enter <span aria-hidden="true">→</span><span class="sr-only">piece one, with sound</span></span>
+          </div>
+        </div>
+      </a>
+
+      <a class="work" href="piece-2/web/">
+        <div class="frame">
+          <img src="docs/images/piece-2-thumb.jpg" alt="Glossy jelly sweets floating in black space: striped, speckled and clear, catching studio window highlights." width="960" height="600">
+          <span class="numeral" aria-hidden="true">ii.</span>
+        </div>
+        <div class="body">
+          <h2>jelly asteroids</h2>
+          <p>Fly through black space among giant jelly sweets. They squash when they touch, melt together for good, and wobble. Each one hums at a pitch set by its size, and every merge plops like a water drop.</p>
+          <div class="meta">
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>sound</span>
+            <span class="enter">enter <span aria-hidden="true">→</span><span class="sr-only">piece two, with sound</span></span>
+          </div>
+        </div>
+      </a>
+    </section>
+
+    <p class="how">Move the pointer (or drag, on touch screens) to lean and steer, and the world carries you forward.
+      <kbd>M</kbd> mutes. Best on a desktop browser with a decent graphics card (WebGL2).</p>
+
+    <footer>
+      <span>Jelly light after Jelly Baby and Unix Jelly · sound engines in Rust/WASM</span>
+      <span><a href="https://github.com/boxabirds/xiuxiueig">source</a> · GPL-3.0</span>
+    </footer>
+  </main>
+
+  <script>
+  // A few glossy jellies drifting in black space, lit by a four-pane studio
+  // window (after piece 2). They melt together where they meet. Kept light:
+  // reduced resolution, paused when hidden, one still frame for reduced motion.
+  (() => {
+    const RENDER_SCALE = 0.75;
+    const MAX_DPR = 2;
+    const BLOBS = 7;
+    const PALETTE = ['#ff4d6d', '#62c934', '#3a5bff', '#ffc61a', '#ff8a2b', '#9b5cff', '#ff4d6d'];
+    const POINTER_EASE = 0.04;
+
+    const canvas = document.getElementById('jelly');
+    const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false });
+    if (!gl) { canvas.remove(); return; }
+
+    const vs = `#version 300 es
+      out vec2 vUv;
+      void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)); vUv = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+    const fs = `#version 300 es
+      precision highp float;
+      in vec2 vUv;
+      uniform vec2 uRes;
+      uniform float uTime;
+      uniform vec2 uPointer;
+      uniform vec3 uColor[${BLOBS}];
+      out vec4 frag;
+      const int N = ${BLOBS};
+      const float K = 0.55;           // melt radius where jellies meet
+      vec4 blob(int i) {
+        float fi = float(i);
+        float t = uTime * (0.045 + 0.012 * fi);
+        // orbit a clear middle so the title stays legible
+        float a = fi / float(N) * 6.2831853 + t * 1.3;
+        float ring = 2.9 + 0.6 * sin(t * 1.7 + fi * 1.3);
+        vec3 c = vec3(cos(a) * ring * 1.15, sin(a) * ring * 0.62, 1.2 + 1.4 * cos(t + fi * 0.9));
+        float r = 0.55 + 0.32 * fract(sin(fi * 12.9898) * 43758.5453);
+        return vec4(c, r);
+      }
+      float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
+      float field(vec3 p) {
+        float d = 1e9;
+        for (int i = 0; i < N; i++) {
+          vec4 b = blob(i);
+          vec3 q = p - b.xyz;
+          float wob = 0.05 * sin(q.x * 3.0 + uTime * 0.7 + float(i)) * sin(q.y * 2.7 - uTime * 0.5);
+          d = smin(d, length(q) - b.w - wob, K);
+        }
+        return d;
+      }
+      vec3 normalAt(vec3 p) {
+        const vec2 e = vec2(0.002, 0.0);
+        return normalize(vec3(field(p + e.xyy) - field(p - e.xyy), field(p + e.yxy) - field(p - e.yxy), field(p + e.yyx) - field(p - e.yyx)));
+      }
+      vec3 colorAt(vec3 p) {
+        vec3 c = vec3(0.0); float w = 0.0;
+        for (int i = 0; i < N; i++) { vec4 b = blob(i); float k = exp(-3.0 * max(length(p - b.xyz) - b.w, 0.0)); c += uColor[i] * k; w += k; }
+        return c / max(w, 1e-4);
+      }
+      float pane(vec2 q, vec2 size) {
+        vec2 e = smoothstep(size, size * 0.9, abs(q));
+        float bars = smoothstep(0.012, 0.024, abs(q.x)) * smoothstep(0.012, 0.024, abs(q.y));
+        return e.x * e.y * bars;
+      }
+      vec3 studio(vec3 d) {
+        // camera-fixed softboxes: a big four-pane key behind-left, a cool fill, two rim strips
+        vec3 c = vec3(0.0);
+        vec3 key = normalize(vec3(-0.45, 0.55, 0.7));
+        if (dot(d, key) > 0.0) { vec3 u = normalize(cross(vec3(0, 1, 0), key)), v = cross(key, u); vec2 q = vec2(dot(d, u), dot(d, v)) / dot(d, key); c += vec3(6.5, 6.2, 5.8) * pane(q, vec2(0.3, 0.22)); }
+        vec3 fill = normalize(vec3(0.85, 0.2, 0.5));
+        if (dot(d, fill) > 0.0) { vec3 u = normalize(cross(vec3(0, 1, 0), fill)), v = cross(fill, u); vec2 q = vec2(dot(d, u), dot(d, v)) / dot(d, fill); vec2 e = smoothstep(vec2(0.3, 0.42), vec2(0.27, 0.38), abs(q)); c += vec3(1.6, 2.1, 3.0) * e.x * e.y; }
+        c += vec3(3.5) * smoothstep(0.06, 0.02, abs(d.x - 0.93)) * smoothstep(0.7, 0.5, abs(d.y));
+        c += vec3(3.5) * smoothstep(0.06, 0.02, abs(d.x + 0.93)) * smoothstep(0.7, 0.5, abs(d.y));
+        return c;
+      }
+      float stars(vec2 uv) {
+        vec2 g = floor(uv * 180.0); float h = fract(sin(dot(g, vec2(127.1, 311.7))) * 43758.5453);
+        vec2 f = fract(uv * 180.0) - 0.5;
+        return step(0.996, h) * smoothstep(0.3, 0.0, length(f)) * (h - 0.996) * 180.0;
+      }
+      vec3 neutral(vec3 c) {
+        float x = min(c.r, min(c.g, c.b)); float off = x < 0.08 ? x - 6.25 * x * x : 0.04; c -= off;
+        float peak = max(c.r, max(c.g, c.b)); if (peak < 0.76) return c;
+        float d = 0.24, np = 1.0 - d * d / (peak + d - 0.76); c *= np / peak;
+        return mix(c, vec3(np), 1.0 - 1.0 / (0.15 * (peak - np) + 1.0));
+      }
+      void main() {
+        vec2 p = (vUv * 2.0 - 1.0) * vec2(uRes.x / uRes.y, 1.0);
+        vec3 ro = vec3(uPointer * vec2(0.35, 0.2), -6.0);
+        vec3 rd = normalize(vec3(p * 0.62, 1.0) - vec3(uPointer * 0.03, 0.0));
+        vec3 col = vec3(0.85, 0.9, 1.0) * stars(vUv * vec2(uRes.x / uRes.y, 1.0) + uPointer * 0.01) * 0.6;
+        float t = 0.0;
+        for (int i = 0; i < 80; i++) {
+          float d = field(ro + rd * t);
+          if (d < 0.002) {
+            vec3 pos = ro + rd * t, n = normalAt(pos);
+            vec3 tint = colorAt(pos);
+            float ndv = clamp(dot(n, -rd), 0.0, 1.0);
+            float F = 0.028 + 0.972 * pow(1.0 - ndv, 5.0);
+            // deep colour where the jelly is thick (facing you), light at the thin edges, a rim
+            vec3 deep = tint * tint * 0.9;
+            vec3 body = mix(tint * 1.15, deep, ndv * ndv) * (0.35 + 0.65 * ndv);
+            float rim = pow(1.0 - ndv, 3.0) * 0.6;
+            col = body * 0.85 + tint * rim + F * studio(reflect(rd, n)) + studio(reflect(rd, n)) * 0.06;
+            break;
+          }
+          t += d;
+          if (t > 14.0) break;
+        }
+        vec3 c = neutral(col);
+        frag = vec4(pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+      }`;
+
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    let prog;
+    try {
+      prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+    } catch (err) { console.warn('jelly background unavailable:', err.message); canvas.remove(); return; }
+    gl.useProgram(prog);
+    const u = (n) => gl.getUniformLocation(prog, n);
+    const uRes = u('uRes'), uTime = u('uTime'), uPointer = u('uPointer');
+    const toLinear = (hex) => [1, 3, 5].map((i) => ((parseInt(hex.slice(i, i + 2), 16) / 255) ** 2.2));
+    gl.uniform3fv(u('uColor'), PALETTE.flatMap(toLinear));
+    gl.bindVertexArray(gl.createVertexArray());
+
+    const pointer = [0, 0], target = [0, 0];
+    window.addEventListener('pointermove', (e) => { target[0] = (e.clientX / innerWidth) * 2 - 1; target[1] = 1 - (e.clientY / innerHeight) * 2; });
+
+    function resize() {
+      const dpr = Math.min(devicePixelRatio || 1, MAX_DPR) * RENDER_SCALE;
+      canvas.width = Math.max(1, Math.round(innerWidth * dpr));
+      canvas.height = Math.max(1, Math.round(innerHeight * dpr));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+    }
+    resize();
+    window.addEventListener('resize', () => { resize(); if (still) draw(performance.now()); });
+
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let running = !still;
+    function draw(now) {
+      pointer[0] += (target[0] - pointer[0]) * POINTER_EASE;
+      pointer[1] += (target[1] - pointer[1]) * POINTER_EASE;
+      gl.uniform1f(uTime, (now / 1000) % 100000);
+      gl.uniform2f(uPointer, pointer[0], pointer[1]);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    function loop(now) { if (!running) return; draw(now); requestAnimationFrame(loop); }
+    document.addEventListener('visibilitychange', () => {
+      const wasRunning = running;
+      running = !still && !document.hidden;
+      if (running && !wasRunning) requestAnimationFrame(loop);
+    });
+    if (still) draw(12000); else requestAnimationFrame(loop);
+    window.__landing = { gl };
+  })();
+  </script>
+</body>
+</html>

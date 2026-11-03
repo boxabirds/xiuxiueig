@@ -67,6 +67,15 @@ with you. They squash when they touch, merge for good, and wobble.
 
 ## Running
 
+The landing page (`index.html`) links to both pieces. Any static server at the
+repository root serves the whole site, with no build step:
+
+```bash
+python3 -m http.server 5181   # then open http://127.0.0.1:5181
+```
+
+To work on a piece with live reload:
+
 Each piece is self-contained. You need Node, bun (or npm) and, to rebuild the
 sound engines, Rust with the `wasm32-unknown-unknown` target. The compiled
 `.wasm` files are committed.
